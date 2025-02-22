@@ -17,67 +17,53 @@ namespace RepairService
             InitializeComponent();
             _userId = userId;
             _userRole = userRole;
+
+            // Настройка DataGridView
             SetupDataGridView();
-            LoadRequests();
+
+            // Настройка фильтров
             SetupFilters();
+
+            // Загрузка данных
             LoadRequests();
+
+            // Настройка прав доступа
             btnNewRequest.Visible = _userRole != "executor";
             btnStatistics.Visible = _userRole == "admin" || _userRole == "manager";
+            btnReports.Visible = _userRole == "admin" || _userRole == "manager";
+
 
             this.Text = $"Система учета ремонтных заявок - {_userRole}";
         }
 
         private void SetupDataGridView()
         {
+            // Настройка внешнего вида и поведения DataGridView
             dgvRequests.AutoGenerateColumns = false;
+            dgvRequests.AllowUserToAddRows = false;
+            dgvRequests.AllowUserToDeleteRows = false;
+            dgvRequests.ReadOnly = true;
+            dgvRequests.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvRequests.MultiSelect = false;
+            dgvRequests.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-            dgvRequests.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "RequestId",
-                HeaderText = "№",
-                DataPropertyName = "request_id",
-                Width = 50
-            });
+            // Определение колонок
+            dgvRequests.Columns.Clear();
+            dgvRequests.Columns.AddRange(
+                new DataGridViewTextBoxColumn { DataPropertyName = "№", HeaderText = "№", Width = 50 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Дата создания", HeaderText = "Дата создания", Width = 120 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Оборудование", HeaderText = "Оборудование", Width = 150 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Тип неисправности", HeaderText = "Тип неисправности", Width = 150 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Описание", HeaderText = "Описание", Width = 200 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Статус", HeaderText = "Статус", Width = 100 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Клиент", HeaderText = "Клиент", Width = 150 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Исполнитель", HeaderText = "Исполнитель", Width = 150 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Плановая дата", HeaderText = "Плановая дата", Width = 120 },
+                new DataGridViewTextBoxColumn { DataPropertyName = "Фактическая дата", HeaderText = "Фактическая дата", Width = 120 }
+            );
 
-            dgvRequests.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "CreatedAt",
-                HeaderText = "Дата создания",
-                DataPropertyName = "created_at",
-                Width = 120
-            });
-
-            dgvRequests.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Equipment",
-                HeaderText = "Оборудование",
-                DataPropertyName = "equipment_name",
-                Width = 150
-            });
-
-            dgvRequests.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Problem",
-                HeaderText = "Проблема",
-                DataPropertyName = "problem_description",
-                Width = 200
-            });
-
-            dgvRequests.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Status",
-                HeaderText = "Статус",
-                DataPropertyName = "status",
-                Width = 100
-            });
-
-            dgvRequests.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "Executor",
-                HeaderText = "Исполнитель",
-                DataPropertyName = "executor_name",
-                Width = 150
-            });
+            // Добавляем обработчик события форматирования ячеек
+            dgvRequests.CellFormatting += DgvRequests_CellFormatting;
         }
 
         private void SetupFilters()
@@ -93,43 +79,39 @@ namespace RepairService
             cmbStatusFilter.SelectedIndexChanged += (s, e) => ApplyFilters();
         }
 
-        private void ApplyFilters()
+        private void DgvRequests_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            if (_requestsTable == null) return;
-
-            try
+            if (e.Value != null)
             {
-                string equipmentSearch = txtSearchEquipment.Text.ToLower().Trim();
-                string malfunctionSearch = txtSearchMalfunction.Text.ToLower().Trim();
-                string statusFilter = cmbStatusFilter.SelectedIndex == 0 ? "" : cmbStatusFilter.SelectedItem.ToString();
+                var column = dgvRequests.Columns[e.ColumnIndex];
 
-                DataView dv = _requestsTable.DefaultView;
-                var filterParts = new List<string>();
-
-                // Фильтр по оборудованию
-                if (!string.IsNullOrEmpty(equipmentSearch))
+                // Форматирование дат
+                if (column.HeaderText.Contains("дата"))
                 {
-                    filterParts.Add($"LOWER(Оборудование) LIKE '%{equipmentSearch}%'");
+                    if (e.Value is DateTime dateValue)
+                    {
+                        e.Value = dateValue.ToString("dd.MM.yyyy HH:mm");
+                        e.FormattingApplied = true;
+                    }
                 }
 
-                // Фильтр по типу неисправности
-                if (!string.IsNullOrEmpty(malfunctionSearch))
+                // Форматирование статусов
+                if (column.HeaderText == "Статус")
                 {
-                    filterParts.Add($"LOWER([Тип неисправности]) LIKE '%{malfunctionSearch}%'");
+                    switch (e.Value.ToString().ToLower())
+                    {
+                        case "waiting":
+                            e.Value = "Ожидание";
+                            break;
+                        case "in_progress":
+                            e.Value = "В работе";
+                            break;
+                        case "completed":
+                            e.Value = "Завершено";
+                            break;
+                    }
+                    e.FormattingApplied = true;
                 }
-
-                // Фильтр по статусу
-                if (!string.IsNullOrEmpty(statusFilter))
-                {
-                    filterParts.Add($"Статус = '{statusFilter}'");
-                }
-
-                dv.RowFilter = string.Join(" AND ", filterParts);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка при применении фильтров: {ex.Message}",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -141,21 +123,21 @@ namespace RepairService
                 {
                     conn.Open();
                     string query = @"
-                    SELECT 
-                        r.request_id as ""№"",
-                        r.created_at as ""Дата создания"",
-                        r.equipment_name as ""Оборудование"",
-                        r.malfunction_type as ""Тип неисправности"",
-                        r.problem_description as ""Описание"",
-                        r.status as ""Статус"",
-                        c.full_name as ""Клиент"",
-                        e.full_name as ""Исполнитель"",
-                        r.estimated_completion_date as ""Плановая дата"",
-                        r.actual_completion_date as ""Фактическая дата""
-                    FROM repair_requests r
-                    LEFT JOIN users c ON r.client_id = c.user_id
-                    LEFT JOIN users e ON r.executor_id = e.user_id
-                    WHERE 1=1 ";
+                        SELECT 
+                            r.request_id as ""№"",
+                            r.created_at as ""Дата создания"",
+                            r.equipment_name as ""Оборудование"",
+                            r.malfunction_type as ""Тип неисправности"",
+                            r.problem_description as ""Описание"",
+                            r.status as ""Статус"",
+                            c.full_name as ""Клиент"",
+                            e.full_name as ""Исполнитель"",
+                            r.estimated_completion_date as ""Плановая дата"",
+                            r.actual_completion_date as ""Фактическая дата""
+                        FROM repair_requests r
+                        LEFT JOIN users c ON r.client_id = c.user_id
+                        LEFT JOIN users e ON r.executor_id = e.user_id
+                        WHERE 1=1 ";
 
                     if (_userRole == "executor")
                         query += " AND r.executor_id = @userId";
@@ -173,24 +155,47 @@ namespace RepairService
                         {
                             _requestsTable = new DataTable();
                             adapter.Fill(_requestsTable);
-                            dgvRequests.DataSource = _requestsTable;
                         }
                     }
 
-                    // Настройка отображения датагрида
-                    dgvRequests.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                    foreach (DataGridViewColumn col in dgvRequests.Columns)
-                    {
-                        if (col.Name.Contains("дата"))
-                        {
-                            col.DefaultCellStyle.Format = "dd.MM.yyyy HH:mm";
-                        }
-                    }
+                    // Устанавливаем источник данных
+                    dgvRequests.DataSource = _requestsTable;
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка при загрузке заявок: {ex.Message}",
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyFilters()
+        {
+            if (_requestsTable == null) return;
+
+            try
+            {
+                string equipmentSearch = txtSearchEquipment.Text.ToLower().Trim();
+                string malfunctionSearch = txtSearchMalfunction.Text.ToLower().Trim();
+                string statusFilter = cmbStatusFilter.SelectedIndex == 0 ? "" : cmbStatusFilter.SelectedItem.ToString();
+
+                var filterParts = new List<string>();
+
+                if (!string.IsNullOrEmpty(equipmentSearch))
+                    filterParts.Add($"Convert([Оборудование], 'System.String') LIKE '%{equipmentSearch}%'");
+
+                if (!string.IsNullOrEmpty(malfunctionSearch))
+                    filterParts.Add($"Convert([Тип неисправности], 'System.String') LIKE '%{malfunctionSearch}%'");
+
+                if (!string.IsNullOrEmpty(statusFilter))
+                    filterParts.Add($"[Статус] = '{statusFilter}'");
+
+                _requestsTable.DefaultView.RowFilter = filterParts.Count > 0 ?
+                    string.Join(" AND ", filterParts) : "";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при применении фильтров: {ex.Message}",
                     "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -221,6 +226,19 @@ namespace RepairService
                     LoadRequests();
                 }
             }
+        }
+        private void btnReports_Click(object sender, EventArgs e)
+        {
+            if (_userRole == "admin" || _userRole == "manager")
+            {
+                var form = new ReportForm(_userRole);
+                form.ShowDialog();
+            }
+        }
+        private void btnFeedback_Click(object sender, EventArgs e)
+        {
+            var form = new FeedbackForm();
+            form.ShowDialog();
         }
     }
 }
